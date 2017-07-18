@@ -18,12 +18,16 @@ namespace Abp.Dapper.Tests
         private readonly IDapperRepository<Product> _productDapperRepository;
         private readonly IRepository<Product> _productRepository;
         private readonly IUnitOfWorkManager _unitOfWorkManager;
+        private readonly IRepository<ProductDetail> _productDetailRepository;
+        private readonly IDapperRepository<ProductDetail> _productDetailDapperRepository;
 
         public DapperRepository_Tests()
         {
             _productDapperRepository = Resolve<IDapperRepository<Product>>();
             _productRepository = Resolve<IRepository<Product>>();
             _unitOfWorkManager = Resolve<IUnitOfWorkManager>();
+            _productDetailRepository = Resolve<IRepository<ProductDetail>>();
+            _productDetailDapperRepository = Resolve<IDapperRepository<ProductDetail>>();
         }
 
         [Fact]
@@ -38,7 +42,7 @@ namespace Abp.Dapper.Tests
                 insertedProduct.ShouldNotBeNull();
                 insertedProduct.TenantId.ShouldBe(AbpSession.TenantId);
                 insertedProduct.CreationTime.ShouldNotBeNull();
-                insertedProduct.CreatorUserId.ShouldBeNull();
+                insertedProduct.CreatorUserId.ShouldBe(AbpSession.UserId);
 
                 //----Update operation should work and Modification Audits should be set---------------------------
                 _productDapperRepository.Insert(new Product("TShirt"));
@@ -121,7 +125,24 @@ namespace Abp.Dapper.Tests
                     Product productWithTenantId3FromDapperInsideTenantScope = _productDapperRepository.FirstOrDefault(x => x.Name == "ProductWithTenant3");
                     productWithTenantId3FromDapperInsideTenantScope.ShouldNotBeNull();
                 }
-               
+
+                //About issue-#2091
+                using (_unitOfWorkManager.Current.SetTenantId(AbpSession.TenantId))
+                {
+                    int productWithTenantId40 = _productDapperRepository.InsertAndGetId(new Product("ProductWithTenantId40"));
+
+                    Product productWithTenant40 = _productRepository.Get(productWithTenantId40);
+
+                    productWithTenant40.TenantId.ShouldBe(AbpSession.TenantId);
+                    productWithTenant40.CreatorUserId.ShouldBe(AbpSession.UserId);
+                }
+
+
+                //Second DbContext tests
+                int productDetailId =_productDetailRepository.InsertAndGetId(new ProductDetail("Woman"));
+                _productDetailDapperRepository.Get(productDetailId).ShouldNotBeNull();
+
+
                 uow.Complete();
             }
         }
